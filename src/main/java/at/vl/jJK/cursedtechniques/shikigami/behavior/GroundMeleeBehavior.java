@@ -30,12 +30,13 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 	/**
 	 * How fast the shikigami rushes toward the target, how much damage/stun landing the hit deals,
 	 * how close counts as a hit, how long it'll keep chasing before giving up, how often it
-	 * re-checks during the rush, and the trailing particle effect (spawned behind the shikigami as
-	 * it charges).
+	 * re-checks during the rush, the trailing particle effect (spawned behind the shikigami as it
+	 * charges), and the cooldown before it can be issued again once the current one concludes (hit,
+	 * gave up, or was replaced by a new charge command).
 	 */
 	public record ChargeConfig(double speed, double damage, long stunDurationMillis, long maxDurationMillis,
 			double hitRadius, long tickIntervalTicks, Particle particle, int particleCount,
-			double particleSpread, double particleSpeed, double particleDistanceBehind) {
+			double particleSpread, double particleSpeed, double particleDistanceBehind, long cooldownMillis) {
 	}
 
 	private final JJK jjk;
@@ -44,6 +45,11 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 
 	// Shikigami UUID -> its in-progress charge task, so a despawn or a re-issued charge can cancel it.
 	private final Map<UUID, BukkitTask> chargeTasks = new HashMap<>();
+
+	// Shikigami UUID -> charge cooldown expiry. Only checked when starting a brand new charge (see
+	// onSecondaryCommand) — re-issuing one that's already mid-rush freely cancels and restarts it,
+	// since the cooldown itself only begins once a charge actually concludes.
+	private final Map<UUID, Long> chargeCooldownExpiry = new HashMap<>();
 
 	public GroundMeleeBehavior(JJK jjk, ShikigamiManager manager, ChargeConfig chargeConfig) {
 		this.jjk = jjk;
@@ -83,6 +89,9 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 		UUID shikigamiId = shikigami.getUniqueId();
 
 		BukkitTask existing = chargeTasks.remove(shikigamiId);
+		if (existing == null && isSecondaryCommandOnCooldown(shikigamiId)) {
+			return false;
+		}
 		if (existing != null) {
 			existing.cancel();
 		}
@@ -98,6 +107,7 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 				if (self != null) {
 					self.cancel();
 				}
+				startChargeCooldown(shikigamiId);
 				return;
 			}
 
@@ -106,6 +116,7 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 				if (self != null) {
 					self.cancel();
 				}
+				startChargeCooldown(shikigamiId);
 
 				target.damage(chargeConfig.damage(), shikigami);
 				jjk.getStunManager().stun(target, chargeConfig.stunDurationMillis());
@@ -120,6 +131,16 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 
 		chargeTasks.put(shikigamiId, task);
 		return true;
+	}
+
+	private void startChargeCooldown(UUID shikigamiId) {
+		chargeCooldownExpiry.put(shikigamiId, System.currentTimeMillis() + chargeConfig.cooldownMillis());
+	}
+
+	@Override
+	public boolean isSecondaryCommandOnCooldown(UUID shikigamiId) {
+		Long expiry = chargeCooldownExpiry.get(shikigamiId);
+		return expiry != null && expiry > System.currentTimeMillis();
 	}
 
 	/**
@@ -143,5 +164,6 @@ public class GroundMeleeBehavior implements ShikigamiBehavior {
 		if (task != null) {
 			task.cancel();
 		}
+		chargeCooldownExpiry.remove(mob.getUniqueId());
 	}
 }

@@ -14,6 +14,7 @@ import org.bukkit.scheduler.BukkitTask;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 
 import at.vl.jJK.JJK;
+import at.vl.jJK.cursedtechniques.technique.CursedTechniqueType;
 
 public class CursedEnergyManager implements JJKManager {
 	private final JJK jjk;
@@ -97,7 +98,8 @@ public class CursedEnergyManager implements JJKManager {
 		String cursedEnergy = "<gradient:#BF606C:#77C255>Cursed Energy:</gradient> <white>"
 				+  (int) Math.round(getCursedEnergy(player)) + " / " + (int) Math.round(getMaxCursedEnergy(player)) + "</white>";
 
-		String cursedTechnique = jjk.getCursedTechniqueManager().getPlayerCursedTechnique(player).getDisplayName();
+		CursedTechniqueType technique = jjk.getCursedTechniqueManager().getPlayerCursedTechnique(player);
+		String cursedTechnique = technique != null ? technique.getDisplayName() : "None";
 
 		player.sendActionBar(MiniMessage.miniMessage().deserialize(cursedEnergy +
 				"                 " + "Cursed Technique: " + cursedTechnique));

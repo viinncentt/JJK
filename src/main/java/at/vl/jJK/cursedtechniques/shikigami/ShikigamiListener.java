@@ -11,12 +11,20 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityDeathEvent;
+import org.bukkit.event.entity.EntityDismountEvent;
 import org.bukkit.event.entity.EntityTeleportEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInputEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -76,11 +84,93 @@ public class ShikigamiListener implements Listener {
 			return;
 		}
 
-		// RIGHT_CLICK_AIR: attack whatever the player is aiming at.
+		// RIGHT_CLICK_AIR: attack whatever the player is aiming at, or — if aiming at nothing —
+		// toggle riding it (a no-op for any archetype that doesn't support carrying).
 		LivingEntity target = resolveTargetedEntity(player);
 		if (target != null) {
 			jjk.getShikigamiManager().commandAttack(shikigamiId, target);
+		} else {
+			jjk.getShikigamiManager().toggleCarry(shikigamiId, player);
 		}
+	}
+
+	@EventHandler
+	public void onInput(PlayerInputEvent event) {
+		jjk.getShikigamiManager().cacheInput(event.getPlayer().getUniqueId(), event.getInput());
+	}
+
+	@EventHandler
+	public void onDismount(EntityDismountEvent event) {
+		// Vanilla dismounts any passenger the moment they press sneak — but sneak is also "fly down"
+		// while carrying, so block that automatic dismount for as long as the ride is still flagged
+		// active. Whatever ends a carry intentionally (ShikigamiManager#toggleCarry,
+		// FlightBehavior#endCarry) clears the flag before its own removePassenger() call, so that
+		// end-of-ride dismount still goes through.
+		if (event.getEntity() instanceof Player && jjk.getShikigamiManager().isCarrying(event.getDismounted())) {
+			event.setCancelled(true);
+		}
+	}
+
+	@EventHandler
+	public void onDamage(EntityDamageEvent event) {
+		// Applies to every damage cause, not just FALL — an active shield absorbs any incoming
+		// damage against its owner, up to its remaining pool.
+		if (event.getEntity() instanceof Player player) {
+			double absorbed = jjk.getShikigamiManager().absorbShieldDamage(player, event.getDamage());
+			if (absorbed > 0) {
+				event.setDamage(Math.max(0, event.getDamage() - absorbed));
+			}
+		}
+
+		if (event.getCause() != EntityDamageEvent.DamageCause.FALL) {
+			return;
+		}
+
+		// Shikigami are meant to fly, not walk — never take fall damage regardless of type or archetype.
+		if (jjk.getShikigamiManager().getShikigami(event.getEntity().getUniqueId()) != null) {
+			event.setCancelled(true);
+			return;
+		}
+
+		// One-shot: a carry ride ending (by choice, or the shikigami being force-despawned out from
+		// under the rider mid-air) marks exactly the next fall as immune, not a timed window.
+		if (event.getEntity() instanceof Player player
+				&& jjk.getShikigamiManager().consumeFallDamageImmunity(player.getUniqueId())) {
+			event.setCancelled(true);
+		}
+	}
+
+	@EventHandler
+	public void onToggleSneak(PlayerToggleSneakEvent event) {
+		Player player = event.getPlayer();
+		UUID shikigamiId = readShikigamiId(player.getInventory().getItemInMainHand());
+		if (shikigamiId == null) {
+			return;
+		}
+
+		if (event.isSneaking()) {
+			jjk.getShikigamiManager().startShieldApproach(shikigamiId, player);
+		} else {
+			// endShield() is a safe no-op if nothing was pending/active for this shikigami — sneaking
+			// with the item held while NOT shielding (e.g. just walking around crouched) shouldn't do
+			// anything, and this covers that for free.
+			jjk.getShikigamiManager().endShield(shikigamiId, player);
+		}
+	}
+
+	@EventHandler
+	public void onSwapHandItems(PlayerSwapHandItemsEvent event) {
+		UUID shikigamiId = readShikigamiId(event.getMainHandItem());
+		if (shikigamiId == null) {
+			return;
+		}
+
+		event.setCancelled(true);
+		// The client predicts the hand-swap visually before the server confirms it — cancelling alone
+		// doesn't undo that prediction, so force a resync or the item appears swapped client-side even
+		// though the server-side inventory never actually changed.
+		event.getPlayer().updateInventory();
+		jjk.getShikigamiManager().activateClap(shikigamiId, event.getPlayer());
 	}
 
 	@EventHandler
@@ -95,6 +185,15 @@ public class ShikigamiListener implements Listener {
 		}
 
 		event.setCancelled(true);
+
+		// Riding a shikigami puts the rider's own crosshair on its hitbox for virtually any right
+		// click near it, so the client sends this (an entity-interact) instead of the plain
+		// RIGHT_CLICK_AIR onInteract() handles — right-clicking the shikigami itself always means
+		// "toggle the ride", the same as aiming at nothing does there, not "track it".
+		if (event.getRightClicked().getUniqueId().equals(shikigamiId)) {
+			jjk.getShikigamiManager().toggleCarry(shikigamiId, event.getPlayer());
+			return;
+		}
 
 		if (event.getRightClicked() instanceof LivingEntity target) {
 			jjk.getShikigamiManager().track(shikigamiId, target);
@@ -148,10 +247,42 @@ public class ShikigamiListener implements Listener {
 	}
 
 	@EventHandler
+	public void onPlayerDeath(PlayerDeathEvent event) {
+		Player player = event.getEntity();
+
+		// Shikigami control items are bound to their owner, not lootable — strip them out of the
+		// death-drop pile before despawning whatever they were controlling, the same way running out
+		// of cursed energy does (CursedEnergyManager#reduceCursedEnergy -> ShikigamiManager#despawnAll).
+		event.getDrops().removeIf(item -> readShikigamiId(item) != null);
+		jjk.getShikigamiManager().despawnAll(player.getUniqueId());
+	}
+
+	@EventHandler
+	public void onInventoryClick(InventoryClickEvent event) {
+		// Shikigami control items are bound to their owner's own inventory — block moving one into any
+		// other inventory that's currently open alongside it (a chest, another player's inventory,
+		// etc.) via shift-click or a manual cursor placement. Dropping is already blocked in onDrop().
+		if (!(event.getWhoClicked() instanceof Player)) {
+			return;
+		}
+
+		InventoryType topType = event.getView().getTopInventory().getType();
+		if (topType == InventoryType.PLAYER || topType == InventoryType.CRAFTING) {
+			return;
+		}
+
+		ItemStack movingItem = event.getClick().isShiftClick() ? event.getCurrentItem() : event.getCursor();
+		if (readShikigamiId(movingItem) != null) {
+			event.setCancelled(true);
+		}
+	}
+
+	@EventHandler
 	public void onQuit(PlayerQuitEvent event) {
 		Player player = event.getPlayer();
 
 		jjk.getShikigamiManager().despawnAll(player.getUniqueId());
+		jjk.getShikigamiManager().clearInput(player.getUniqueId());
 		jjk.getLocatorBarManager().untrackAll(player);
 
 		Inventory inventory = player.getInventory();

@@ -420,8 +420,7 @@ public class AdminMenuCommand implements JJKCommand {
 									}
 
 									if (jjk.getShikigamiManager().hasTamed(target, type)) {
-										jjk.getShikigamiManager().giveShikigamiItem(target, formatShikigamiName(type),
-												type, 1, shikigami.getUniqueId());
+										jjk.getShikigamiManager().giveShikigamiItem(target, type, 1, shikigami.getUniqueId());
 									}
 
 									sender.sendMessage(MiniMessage.miniMessage().deserialize(jjk.getLogo()
@@ -543,20 +542,4 @@ public class AdminMenuCommand implements JJKCommand {
 		}
 	}
 
-	/**
-	 * "WHITE_DIVINE_DOG" -> "White Divine Dog", for the control item's display name when summoned
-	 * generically through this admin command (which has no per-type flavor text the way
-	 * TenShadows#activateDivineDogs does).
-	 */
-	private String formatShikigamiName(ShikigamiType type) {
-		String[] words = type.name().split("_");
-		StringBuilder builder = new StringBuilder();
-		for (String word : words) {
-			if (!builder.isEmpty()) {
-				builder.append(' ');
-			}
-			builder.append(word.charAt(0)).append(word.substring(1).toLowerCase());
-		}
-		return builder.toString();
-	}
 }

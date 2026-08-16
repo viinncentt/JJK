@@ -5,6 +5,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -18,6 +19,7 @@ import org.bukkit.event.player.PlayerQuitEvent;
 import at.vl.jJK.JJK;
 import at.vl.jJK.cursedtechniques.technique.AbilityType;
 import at.vl.jJK.cursedtechniques.Bindable;
+import at.vl.jJK.cursedtechniques.BindableCategory;
 import at.vl.jJK.cursedtechniques.technique.CursedTechnique;
 import at.vl.jJK.cursedtechniques.technique.CursedTechniqueType;
 import at.vl.jJK.cursedtechniques.melee.MeleeType;
@@ -93,6 +95,14 @@ public class AbilityListener implements Listener {
 
 		Bindable bound = jjk.getBindManager().getBoundAbility(player, slot);
 		if (bound == null) {
+			return;
+		}
+
+		// Cursed techniques, melee, and special moves are all channeled bare-handed — weaponeering is
+		// the one category actually built around holding a specific weapon item (see
+		// WeaponeeringType's own Material field), so it's the only one exempt from this.
+		if (bound.getCategory() != BindableCategory.WEAPONEERING
+				&& player.getInventory().getItemInMainHand().getType() != Material.AIR) {
 			return;
 		}
 

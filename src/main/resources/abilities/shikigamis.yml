@@ -16,10 +16,10 @@ Types:
 
     Behavior: GROUND_MELEE
 
-    Scale: 2.0
+    Scale: 1.5
     Speed: 0.5
     Damage: 7.5
-    Health: 200.0
+    Health: 40.0
     RegenAmount: 0.25
     DespawnedRegenPerSecond: 1
     FollowRange: 64.0
@@ -40,6 +40,7 @@ Types:
       MaxDurationMillis: 5000
       HitRadius: 1.5
       TickInterval: 1
+      CooldownMillis: 5000
 
       Particle:
         Type: CLOUD
@@ -48,6 +49,7 @@ Types:
         Speed: 0.02
         DistanceBehind: 2.0
 
+    DisplayName: "<#BCAED7>White Divine Dog"
     Lore:
       Line1: "<#74668F>Press <key:key.sneak> + Right Click to despawn"
       Line2: "<#74668F>Right Click a Block to recall"
@@ -62,10 +64,10 @@ Types:
 
     Behavior: GROUND_MELEE
 
-    Scale: 2.0
+    Scale: 1.5
     Speed: 0.5
     Damage: 7.5
-    Health: 200.0
+    Health: 40.0
     RegenAmount: 0.25
     DespawnedRegenPerSecond: 1
     FollowRange: 64.0
@@ -86,6 +88,7 @@ Types:
       MaxDurationMillis: 5000
       HitRadius: 1.5
       TickInterval: 1
+      CooldownMillis: 5000
 
       Particle:
         Type: CLOUD
@@ -94,6 +97,7 @@ Types:
         Speed: 0.02
         DistanceBehind: 1.0
 
+    DisplayName: "<#221F28>Black Divine Dog"
     Lore:
       Line1: "<#74668F>Press <key:key.sneak> + Right Click to despawn"
       Line2: "<#74668F>Right Click a Block to recall"
@@ -104,16 +108,16 @@ Types:
   NUE:
     EntityType: WOLF
     CursedEnergyDrainAmount: 40
-    HighlightColor: PURPLE
+    HighlightColor: DARK_PURPLE
 
     # FLIGHT behavior has no track or charge ability — just idle flight + attack/recall, driven
-    # entirely by the Flight config below.
+    # entirely by the Flight config below. It does support carrying (Carry config below).
     Behavior: FLIGHT
 
     Scale: 2.5
     Speed: 0.5
-    Damage: 10.0
-    Health: 400.0
+    Damage: 5.0
+    Health: 80.0
     RegenAmount: 0.25
     DespawnedRegenPerSecond: 1
     FollowRange: 64.0
@@ -122,17 +126,56 @@ Types:
     DefaultSummonable: true
 
     Flight:
-      OrbitRadius: 4.0
-      HeightOffset: 4.0
+      OrbitRadius: 2.5
+      HeightOffset: 2.5
       Speed: 1.0
       AngularSpeedDegreesPerSecond: 20.0
       AttackRange: 2.0
       AttackIntervalMillis: 1000
 
+    Carry:
+      Speed: 1.2
+      VerticalSpeed: 1.0
+      SeatOffset: 0.6
+      PickupRange: 1.5
+
+    Shield:
+      ApproachRange: 1.5
+      HoverDistance: 1.5
+      MaxDamageBlocked: 5.0
+      MaxDurationMillis: 5000
+      CooldownMillis: 4000
+      CursedEnergyCost: 0
+
+      Title:
+        Text: "<#984DC4>Shielded!"
+        Subtitle: "<#74668F>Nue is protecting you"
+        FadeInTicks: 10
+        StayTicks: 200
+        FadeOutTicks: 10
+
+    Clap:
+      Radius: 4.0
+      Damage: 12.0
+      CooldownMillis: 4000
+      CursedEnergyCost: 0
+      UseLightningEffect: true
+      Particle:
+        Type: DUST
+        Count: 40
+        Spread: 1.5
+        Speed: 0.05
+        Color: "#8B2FC9"
+        Size: 1.5
+
+    DisplayName: "<#984DC4>Nue"
     Lore:
       Line1: "<#74668F>Press <key:key.sneak> + Right Click to despawn"
       Line2: "<#74668F>Right Click a Block to recall"
       Line3: "<#74668F>Right Click while looking at Target to attack"
+      Line4: "<#74668F>Right Click to make Nue Carry you"
+      Line5: "<#74668F>Hold Sneak to make Nue shield you"
+      Line6: "<#74668F>Press <key:key.swap> for Electric Wing Clap"
 
 Order:
   TargetRange: 30.0

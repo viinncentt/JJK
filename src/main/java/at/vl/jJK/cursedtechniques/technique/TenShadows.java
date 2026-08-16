@@ -151,7 +151,7 @@ public class TenShadows implements CursedTechnique {
 		if (!hasWhite) {
 			Mob whiteDog = jjk.getShikigamiManager().summon(player, player.getLocation(), ShikigamiType.WHITE_DIVINE_DOG);
 			if (whiteDog != null && jjk.getShikigamiManager().hasTamed(player, ShikigamiType.WHITE_DIVINE_DOG)) {
-				jjk.getShikigamiManager().giveShikigamiItem(player, "<#BCAED7>White Divine Dog",
+				jjk.getShikigamiManager().giveShikigamiItem(player,
 						ShikigamiType.WHITE_DIVINE_DOG, 1, whiteDog.getUniqueId());
 			}
 		}
@@ -159,7 +159,7 @@ public class TenShadows implements CursedTechnique {
 		if (!hasBlack) {
 			Mob blackDog = jjk.getShikigamiManager().summon(player, player.getLocation(), ShikigamiType.BLACK_DIVINE_DOG);
 			if (blackDog != null && jjk.getShikigamiManager().hasTamed(player, ShikigamiType.BLACK_DIVINE_DOG)) {
-				jjk.getShikigamiManager().giveShikigamiItem(player, "<#221F28>Black Divine Dog",
+				jjk.getShikigamiManager().giveShikigamiItem(player,
 						ShikigamiType.BLACK_DIVINE_DOG, 1, blackDog.getUniqueId());
 			}
 		}
@@ -188,7 +188,7 @@ public class TenShadows implements CursedTechnique {
 
 		Mob nue = jjk.getShikigamiManager().summon(player, player.getLocation(), ShikigamiType.NUE);
 		if (nue != null && jjk.getShikigamiManager().hasTamed(player, ShikigamiType.NUE)) {
-			jjk.getShikigamiManager().giveShikigamiItem(player, "<#7A7A8C>Nue", ShikigamiType.NUE, 1, nue.getUniqueId());
+			jjk.getShikigamiManager().giveShikigamiItem(player, ShikigamiType.NUE, 1, nue.getUniqueId());
 		}
 	}
 

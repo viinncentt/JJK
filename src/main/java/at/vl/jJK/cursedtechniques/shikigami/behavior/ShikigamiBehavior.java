@@ -1,5 +1,7 @@
 package at.vl.jJK.cursedtechniques.shikigami.behavior;
 
+import java.util.UUID;
+
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Mob;
 import org.bukkit.entity.Player;
@@ -58,9 +60,95 @@ public interface ShikigamiBehavior {
 	}
 
 	/**
+	 * Whether this archetype supports being ridden via {@code ShikigamiManager#toggleCarry} at all.
+	 */
+	default boolean supportsCarry() {
+		return false;
+	}
+
+	/**
+	 * Called from {@code ShikigamiManager#toggleCarry} after the generic checks (owner match, archetype
+	 * support, the shared carrying PDC flag) already passed — entirely responsible for the actual
+	 * riding mechanics: what the owner ends up mounted on and how it's driven. {@code start} is
+	 * {@code true} when a ride is beginning, {@code false} when one is ending.
+	 */
+	default void onCarryToggle(Mob mob, ShikigamiType type, Player owner, boolean start) {
+	}
+
+	/**
 	 * Called from {@code ShikigamiManager#despawn} — clean up any per-entity state (tasks, cooldown
 	 * maps) this behavior is tracking for {@code mob}.
 	 */
 	default void onDespawn(Mob mob, ShikigamiType type) {
+	}
+
+	/**
+	 * Whether this archetype supports the shield ability via
+	 * {@code ShikigamiManager#startShieldApproach}/{@code #endShield} at all.
+	 */
+	default boolean supportsShield() {
+		return false;
+	}
+
+	/**
+	 * Called from {@code ShikigamiManager#startShieldApproach}/{@code #endShield} after the generic
+	 * checks (owner match, archetype support for a start) already passed — entirely responsible for
+	 * the actual shield mechanics (flying to the owner, immobilizing both, absorbing damage).
+	 * {@code start} is {@code true} for a request to begin (which may mean "come shield me" or, if
+	 * already mid-approach/engaged, is up to the archetype to interpret), {@code false} for a request
+	 * to end — expected to be a safe no-op if nothing was pending or active.
+	 */
+	default void onShieldToggle(Mob mob, ShikigamiType type, Player owner, boolean start) {
+	}
+
+	/**
+	 * Whether this specific shikigami's shield is currently on cooldown — used to strike through its
+	 * lore line the same way {@code ShikigamiManager#isTrackOnCooldown} already does for tracking.
+	 */
+	default boolean isShieldOnCooldown(UUID shikigamiId) {
+		return false;
+	}
+
+	/**
+	 * Reduces {@code incomingDamage} against this shikigami's owner by however much of an active
+	 * shield's remaining absorption pool applies, returning the amount actually absorbed (0 if no
+	 * shield is active). May end the shield as a side effect if this exhausts its pool.
+	 */
+	default double absorbShieldDamage(Mob mob, double incomingDamage) {
+		return 0;
+	}
+
+	/**
+	 * Whether this archetype supports the "clap" ability (a one-shot effect centered on the
+	 * shikigami's own current location, e.g. Nue's Electric Wing Clap) via
+	 * {@code ShikigamiManager#activateClap} at all.
+	 */
+	default boolean supportsClap() {
+		return false;
+	}
+
+	/**
+	 * Called from {@code ShikigamiManager#activateClap} after the generic checks (owner match,
+	 * archetype support) already passed — entirely responsible for whatever the clap actually does
+	 * (damage, visuals, cooldown).
+	 */
+	default void onClap(Mob mob, ShikigamiType type, Player owner) {
+	}
+
+	/**
+	 * Whether this specific shikigami's clap is currently on cooldown — used to strike through its
+	 * lore line the same way {@code ShikigamiManager#isTrackOnCooldown} already does for tracking.
+	 */
+	default boolean isClapOnCooldown(UUID shikigamiId) {
+		return false;
+	}
+
+	/**
+	 * Whether this specific shikigami's secondary ability (see {@link #onSecondaryCommand}, e.g.
+	 * Divine Dogs' charge) is currently on cooldown — used to strike through its lore line the same
+	 * way {@code ShikigamiManager#isTrackOnCooldown} already does for tracking.
+	 */
+	default boolean isSecondaryCommandOnCooldown(UUID shikigamiId) {
+		return false;
 	}
 }

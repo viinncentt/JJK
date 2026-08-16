@@ -5,10 +5,12 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Bukkit;
+import org.bukkit.Input;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -67,8 +69,25 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 	private final NamespacedKey ownerKey;
 	private final NamespacedKey typeKey;
 	private final NamespacedKey entityIdKey;
+	private final NamespacedKey carryingKey;
+	private final NamespacedKey shieldingKey;
 
 	private final Map<UUID, Mob> activeShikigami = new HashMap<>();
+
+	// Player UUID -> their latest raw movement input, cached from PlayerInputEvent (which reports
+	// WASD/jump/sneak intent even while riding a non-steerable passenger vehicle, unlike vanilla
+	// movement itself). Only ever consulted while that player is being carried — see
+	// FlightBehavior#tickCarry.
+	private final Map<UUID, Input> latestInput = new ConcurrentHashMap<>();
+
+	// Player UUID -> pending one-shot fall-damage immunity, consumed by the next FALL damage event —
+	// see markFallDamageImmune/consumeFallDamageImmunity.
+	private final Set<UUID> fallDamageImmune = ConcurrentHashMap.newKeySet();
+
+	// Owner UUID -> the shikigami currently shielding them, so a player-keyed EntityDamageEvent (see
+	// ShikigamiListener#onDamage) can find its way back to the right FlightBehavior#absorbShieldDamage
+	// call without needing to know which shikigami it belongs to.
+	private final Map<UUID, UUID> shieldingOwners = new ConcurrentHashMap<>();
 
 	// Shikigami UUID -> the entity that specific shikigami currently has tracked (via the "track"
 	// ability), glowing for its owner only. Keyed per-shikigami (not per-owner) so two shikigami
@@ -123,6 +142,8 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 		this.ownerKey = new NamespacedKey(jjk, "shikigami_owner");
 		this.typeKey = new NamespacedKey(jjk, "shikigami_type");
 		this.entityIdKey = new NamespacedKey(jjk, ENTITY_ID_KEY);
+		this.carryingKey = new NamespacedKey(jjk, "shikigami_carrying");
+		this.shieldingKey = new NamespacedKey(jjk, "shikigami_shielding");
 
 		file = new File(jjk.getDataFolder(), "abilities/shikigamis.yml");
 		if (!file.exists()) {
@@ -161,6 +182,7 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 
 		for (ShikigamiType type : ShikigamiType.values()) {
 			String typePath = "Types." + type.name();
+			String displayName = config.getString(typePath + ".DisplayName", type.name());
 			String raw = config.getString(typePath + ".EntityType", "WOLF");
 			double drainAmount = config.getDouble(typePath + ".CursedEnergyDrainAmount");
 			long trackCooldownMillis = config.getLong(typePath + ".Track.CooldownMillis");
@@ -184,16 +206,17 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 					loadControlItemLoreLines(typePath));
 
 			try {
-				type.load(EntityType.valueOf(raw.toUpperCase()), drainAmount, trackCooldownMillis, trackCursedEnergyCost,
-						trackLocatorColor, trackEntityColor, highlightColor, scale, speed, damage, health,
-						regenAmount, despawnedRegenPerSecond, followRange, defaultTamed, defaultSummonable,
-						controlItemLore);
+				type.load(displayName, EntityType.valueOf(raw.toUpperCase()), drainAmount, trackCooldownMillis,
+						trackCursedEnergyCost, trackLocatorColor, trackEntityColor, highlightColor, scale, speed,
+						damage, health, regenAmount, despawnedRegenPerSecond, followRange, defaultTamed,
+						defaultSummonable, controlItemLore);
 			} catch (IllegalArgumentException e) {
 				jjk.getLogger().warning("Invalid entity type '" + raw + "' for shikigami type " + type.name()
 						+ ", defaulting to WOLF");
-				type.load(EntityType.WOLF, drainAmount, trackCooldownMillis, trackCursedEnergyCost, trackLocatorColor,
-						trackEntityColor, highlightColor, scale, speed, damage, health, regenAmount,
-						despawnedRegenPerSecond, followRange, defaultTamed, defaultSummonable, controlItemLore);
+				type.load(displayName, EntityType.WOLF, drainAmount, trackCooldownMillis, trackCursedEnergyCost,
+						trackLocatorColor, trackEntityColor, highlightColor, scale, speed, damage, health,
+						regenAmount, despawnedRegenPerSecond, followRange, defaultTamed, defaultSummonable,
+						controlItemLore);
 			}
 
 			behaviors.put(type, loadBehavior(type, typePath));
@@ -223,9 +246,58 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 		}
 
 		return switch (archetype) {
-			case FLIGHT -> new FlightBehavior(this, loadFlightConfig(typePath));
+			case FLIGHT -> new FlightBehavior(jjk, this, loadFlightConfig(typePath), loadCarryConfig(typePath),
+					loadShieldConfig(typePath), loadClapConfig(typePath));
 			case GROUND_MELEE -> new GroundMeleeBehavior(jjk, this, loadChargeConfig(typePath));
 		};
+	}
+
+	private FlightBehavior.CarryConfig loadCarryConfig(String typePath) {
+		return new FlightBehavior.CarryConfig(
+				config.getDouble(typePath + ".Carry.Speed", 1.2),
+				config.getDouble(typePath + ".Carry.VerticalSpeed", 1.0),
+				config.getDouble(typePath + ".Carry.SeatOffset", 0.6),
+				config.getDouble(typePath + ".Carry.PickupRange", 1.5));
+	}
+
+	private FlightBehavior.ShieldConfig loadShieldConfig(String typePath) {
+		return new FlightBehavior.ShieldConfig(
+				config.getDouble(typePath + ".Shield.ApproachRange", 1.5),
+				config.getDouble(typePath + ".Shield.HoverDistance", 1.5),
+				config.getDouble(typePath + ".Shield.MaxDamageBlocked", 40.0),
+				config.getLong(typePath + ".Shield.MaxDurationMillis", 6000),
+				config.getLong(typePath + ".Shield.CooldownMillis", 15000),
+				config.getDouble(typePath + ".Shield.CursedEnergyCost", 0),
+				config.getString(typePath + ".Shield.Title.Text", "<#984DC4>Shielded!"),
+				config.getString(typePath + ".Shield.Title.Subtitle", "<#74668F>Nue is protecting you"),
+				config.getInt(typePath + ".Shield.Title.FadeInTicks", 10),
+				config.getInt(typePath + ".Shield.Title.StayTicks", 200),
+				config.getInt(typePath + ".Shield.Title.FadeOutTicks", 10));
+	}
+
+	private FlightBehavior.ClapConfig loadClapConfig(String typePath) {
+		String particleRaw = config.getString(typePath + ".Clap.Particle.Type", "DUST");
+		Particle clapParticle;
+		try {
+			clapParticle = Particle.valueOf(particleRaw.toUpperCase());
+		} catch (IllegalArgumentException e) {
+			jjk.getLogger().warning("Invalid particle '" + particleRaw + "' at '" + typePath
+					+ ".Clap.Particle.Type', defaulting to DUST");
+			clapParticle = Particle.DUST;
+		}
+
+		return new FlightBehavior.ClapConfig(
+				config.getDouble(typePath + ".Clap.Radius", 4.0),
+				config.getDouble(typePath + ".Clap.Damage", 12.0),
+				config.getLong(typePath + ".Clap.CooldownMillis", 8000),
+				config.getDouble(typePath + ".Clap.CursedEnergyCost", 0),
+				config.getBoolean(typePath + ".Clap.UseLightningEffect", true),
+				clapParticle,
+				config.getInt(typePath + ".Clap.Particle.Count", 40),
+				config.getDouble(typePath + ".Clap.Particle.Spread", 1.5),
+				config.getDouble(typePath + ".Clap.Particle.Speed", 0.05),
+				parseBukkitColor(typePath + ".Clap.Particle.Color", "#8B2FC9"),
+				config.getDouble(typePath + ".Clap.Particle.Size", 1.5));
 	}
 
 	private GroundMeleeBehavior.ChargeConfig loadChargeConfig(String typePath) {
@@ -250,7 +322,8 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 				config.getInt(typePath + ".Charge.Particle.Count", 3),
 				config.getDouble(typePath + ".Charge.Particle.Spread", 0.15),
 				config.getDouble(typePath + ".Charge.Particle.Speed", 0.02),
-				config.getDouble(typePath + ".Charge.Particle.DistanceBehind", 1.0));
+				config.getDouble(typePath + ".Charge.Particle.DistanceBehind", 1.0),
+				config.getLong(typePath + ".Charge.CooldownMillis", 5000));
 	}
 
 	private FlightBehavior.FlightConfig loadFlightConfig(String typePath) {
@@ -383,6 +456,22 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 	}
 
 	/**
+	 * Same idea as {@link #parseColor}, but for a plain RGB {@link org.bukkit.Color} — what
+	 * {@link org.bukkit.Particle.DustOptions} needs, rather than Adventure's {@link TextColor}. Only
+	 * hex strings are accepted (no named-color fallback list, unlike {@code parseColor}) since dust
+	 * particle color has no vanilla "legacy 16 colors" concept to match.
+	 */
+	private org.bukkit.Color parseBukkitColor(String path, String defaultHex) {
+		String raw = config.getString(path, defaultHex);
+		TextColor color = TextColor.fromHexString(raw);
+		if (color == null) {
+			jjk.getLogger().warning("Invalid color '" + raw + "' at '" + path + "', defaulting to " + defaultHex);
+			color = TextColor.fromHexString(defaultHex);
+		}
+		return org.bukkit.Color.fromRGB(color.red(), color.green(), color.blue());
+	}
+
+	/**
 	 * Summons {@code type} for {@code owner}, or does nothing and returns null if {@code owner}
 	 * currently can't summon this type (see {@link #hasSummonable}). Callers must null-check the
 	 * result before doing anything further with it (e.g. giving a control item).
@@ -434,6 +523,9 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 			mob.registerAttribute(Attribute.FOLLOW_RANGE);
 			mob.getAttribute(Attribute.FOLLOW_RANGE).setBaseValue(type.getFollowRange());
 
+			mob.customName(MiniMessage.miniMessage().deserialize(type.getDisplayName()));
+			mob.setCustomNameVisible(true);
+
 			mob.setPersistent(true);
 			mob.setRemoveWhenFarAway(false);
 			mob.getPersistentDataContainer().set(ownerKey, PersistentDataType.STRING, owner.getUniqueId().toString());
@@ -479,14 +571,16 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 	 * Builds the PAPER control item for a summoned shikigami, tagged with its type and UUID so
 	 * {@code ShikigamiListener} can read commands back off it and route them to this manager. Lore
 	 * is built internally (see {@link #buildControlItemLore}) rather than passed in, since it needs
-	 * to be re-rendered later as the track-ability cooldown changes.
+	 * to be re-rendered later as the track-ability cooldown changes. Display name comes from
+	 * {@link ShikigamiType#getDisplayName()} (configured as {@code DisplayName}), same as everything
+	 * else about the item.
 	 */
-	public void giveShikigamiItem(Player player, String name, ShikigamiType type, int number, UUID shikigamiId) {
+	public void giveShikigamiItem(Player player, ShikigamiType type, int number, UUID shikigamiId) {
 		ItemStack item = new ItemStack(Material.PAPER);
 		ItemMeta meta = item.getItemMeta();
 		PersistentDataContainer container = meta.getPersistentDataContainer();
 
-		meta.displayName(MiniMessage.miniMessage().deserialize(name));
+		meta.displayName(MiniMessage.miniMessage().deserialize(type.getDisplayName()));
 		meta.lore(buildControlItemLore(type, shikigamiId));
 
 		NamespacedKey typeTagKey = new NamespacedKey(jjk, type.name() + number);
@@ -499,23 +593,43 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 		player.getInventory().addItem(item);
 	}
 
-	// Index (within ControlItemLore.lines()) of the track-ability line — the only one that gets a
-	// strikethrough prefix applied, whenever that shikigami's track ability is currently on cooldown.
+	// Indices (within ControlItemLore.lines()) of the ability lines that get a strikethrough prefix
+	// applied whenever that specific ability is on cooldown for that specific shikigami. A type whose
+	// archetype doesn't support a given ability just never has that ability's cooldown query return
+	// true (see ShikigamiBehavior's default no-op/false implementations), so this stays harmless for
+	// types with fewer lines or without that ability at all. Index 4 is shared by two different
+	// abilities depending on archetype — Divine Dogs' Line5 is charge (a GroundMeleeBehavior ability),
+	// Nue's Line5 is shield (a FlightBehavior ability) — never both at once for the same type, so
+	// checking both cooldown queries and taking whichever is actually true is safe.
 	private static final int TRACK_LORE_LINE_INDEX = 3;
+	private static final int SECONDARY_OR_SHIELD_LORE_LINE_INDEX = 4;
+	private static final int CLAP_LORE_LINE_INDEX = 5;
 
 	/**
 	 * The control item's lore, configured per type (see {@link ShikigamiType#getControlItemLore()})
-	 * as a flat list of lines (Lore.Line1, Lore.Line2, ...), with the track-ability line (index
-	 * {@value #TRACK_LORE_LINE_INDEX}) struck through whenever that shikigami's track ability is
-	 * currently on cooldown (see {@link #isTrackOnCooldown}).
+	 * as a flat list of lines (Lore.Line1, Lore.Line2, ...), with each ability's line struck through
+	 * whenever that ability is currently on cooldown for this specific shikigami (see
+	 * {@link #isTrackOnCooldown}, {@link ShikigamiBehavior#isSecondaryCommandOnCooldown},
+	 * {@link ShikigamiBehavior#isShieldOnCooldown}, {@link ShikigamiBehavior#isClapOnCooldown}).
 	 */
 	private List<Component> buildControlItemLore(ShikigamiType type, UUID shikigamiId) {
 		List<String> lines = type.getControlItemLore().lines();
+		ShikigamiBehavior behavior = behaviorFor(type);
+
 		String trackPrefix = isTrackOnCooldown(shikigamiId) ? "<strikethrough>" : "";
+		boolean secondaryOrShieldOnCooldown = behavior.isSecondaryCommandOnCooldown(shikigamiId)
+				|| behavior.isShieldOnCooldown(shikigamiId);
+		String secondaryOrShieldPrefix = secondaryOrShieldOnCooldown ? "<strikethrough>" : "";
+		String clapPrefix = behavior.isClapOnCooldown(shikigamiId) ? "<strikethrough>" : "";
 
 		List<Component> components = new ArrayList<>();
 		for (int i = 0; i < lines.size(); i++) {
-			String prefix = i == TRACK_LORE_LINE_INDEX ? trackPrefix : "";
+			String prefix = switch (i) {
+				case TRACK_LORE_LINE_INDEX -> trackPrefix;
+				case SECONDARY_OR_SHIELD_LORE_LINE_INDEX -> secondaryOrShieldPrefix;
+				case CLAP_LORE_LINE_INDEX -> clapPrefix;
+				default -> "";
+			};
 			components.add(MiniMessage.miniMessage().deserialize(prefix + lines.get(i)));
 		}
 		return components;
@@ -594,6 +708,255 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 				return;
 			}
 		}
+	}
+
+	/**
+	 * Caches {@code player}'s latest raw movement input, reported by Paper's
+	 * {@code PlayerInputEvent} regardless of whether they're currently able to act on it via normal
+	 * movement (e.g. while riding a non-steerable passenger vehicle, which ignores WASD/jump
+	 * entirely). Only consulted while that player is being carried — see
+	 * {@link FlightBehavior#tick}.
+	 */
+	public void cacheInput(UUID playerId, Input input) {
+		latestInput.put(playerId, input);
+	}
+
+	/**
+	 * {@code null} if no input has been cached for this player yet.
+	 */
+	public Input getInput(UUID playerId) {
+		return latestInput.get(playerId);
+	}
+
+	/**
+	 * Drops a player's cached input on quit, so it doesn't sit in {@link #latestInput} forever.
+	 */
+	public void clearInput(UUID playerId) {
+		latestInput.remove(playerId);
+	}
+
+	/**
+	 * Whether {@code entity} is currently flagged as part of an active carry ride — either the
+	 * shikigami itself (checked by {@link ShikigamiBehavior#tick} to branch into carry movement, and
+	 * by {@link #despawn} indirectly via the behavior's own {@code onDespawn}) or, for archetypes that
+	 * ride via a stand-in "seat" entity rather than the shikigami directly, that seat (checked by
+	 * {@code ShikigamiListener#onDismount} to block vanilla's sneak-to-dismount for whichever entity
+	 * the owner actually mounted).
+	 */
+	public boolean isCarrying(Entity entity) {
+		return Boolean.TRUE.equals(
+				entity.getPersistentDataContainer().get(carryingKey, PersistentDataType.BOOLEAN));
+	}
+
+	public void markCarrying(Entity entity) {
+		entity.getPersistentDataContainer().set(carryingKey, PersistentDataType.BOOLEAN, true);
+	}
+
+	/**
+	 * Cleared before whatever removes {@code entity} as a rider's vehicle, so the
+	 * {@code EntityDismountEvent} that produces is let through by {@code ShikigamiListener#onDismount}
+	 * instead of being (correctly, for vanilla's own sneak-to-dismount) blocked.
+	 */
+	public void clearCarrying(Entity entity) {
+		entity.getPersistentDataContainer().remove(carryingKey);
+	}
+
+	/**
+	 * Starts or ends a carry ride. A no-op for any type whose archetype doesn't support carrying (see
+	 * {@link ShikigamiBehavior#supportsCarry}) — same "silently does nothing" contract as
+	 * {@link #charge} and {@link #track} for unsupported types — and for anyone but the shikigami's
+	 * own owner. The actual riding mechanics (what the owner mounts, and how it's driven) are entirely
+	 * up to the archetype; see {@link ShikigamiBehavior#onCarryToggle}.
+	 */
+	public void toggleCarry(UUID shikigamiId, Player requester) {
+		Mob shikigami = activeShikigami.get(shikigamiId);
+		if (shikigami == null) {
+			return;
+		}
+
+		ShikigamiType type = getShikigamiType(shikigami);
+		if (type == null || !behaviorFor(type).supportsCarry()) {
+			return;
+		}
+
+		Player owner = getOwner(shikigami);
+		if (owner == null || !owner.getUniqueId().equals(requester.getUniqueId())) {
+			return;
+		}
+
+		// Not carrying yet could mean "idle" or "already mid-approach" — the behavior itself decides
+		// what a start request means from there (see FlightBehavior#onCarryToggle); this only knows
+		// the definitive "actively carrying" state, which behaviorFor(type).onCarryToggle is
+		// responsible for setting (via markCarrying/clearCarrying) once a ride actually begins/ends.
+		behaviorFor(type).onCarryToggle(shikigami, type, owner, !isCarrying(shikigami));
+	}
+
+	/**
+	 * Whether {@code entity} — the shikigami itself — is currently engaged in an active shield (see
+	 * {@link #startShieldApproach}). Mirrors {@link #isCarrying}; the archetype (see
+	 * {@link ShikigamiBehavior#onShieldToggle}) owns when this actually flips, since "engaged" is
+	 * distinct from "approaching" (the latter is archetype-internal state this manager doesn't see).
+	 */
+	public boolean isShielding(Entity entity) {
+		return Boolean.TRUE.equals(
+				entity.getPersistentDataContainer().get(shieldingKey, PersistentDataType.BOOLEAN));
+	}
+
+	public void markShielding(Entity entity) {
+		entity.getPersistentDataContainer().set(shieldingKey, PersistentDataType.BOOLEAN, true);
+	}
+
+	public void clearShielding(Entity entity) {
+		entity.getPersistentDataContainer().remove(shieldingKey);
+	}
+
+	/**
+	 * Records that {@code shikigamiId} is now (or is no longer, if {@code shikigamiId} is null)
+	 * shielding {@code ownerId} — the reverse index {@link #absorbShieldDamage} uses to route a
+	 * player-keyed damage event back to the right shikigami without the listener needing to know
+	 * which one it is.
+	 */
+	public void registerShieldOwner(UUID ownerId, UUID shikigamiId) {
+		shieldingOwners.put(ownerId, shikigamiId);
+	}
+
+	public void unregisterShieldOwner(UUID ownerId) {
+		shieldingOwners.remove(ownerId);
+	}
+
+	/**
+	 * Routes an incoming damage amount against {@code owner} through whatever's currently shielding
+	 * them (if anything), returning how much was actually absorbed — 0 if they have no active shield.
+	 * Called from {@code ShikigamiListener#onDamage} for every damage event against a player.
+	 */
+	public double absorbShieldDamage(Player owner, double incomingDamage) {
+		UUID shikigamiId = shieldingOwners.get(owner.getUniqueId());
+		if (shikigamiId == null) {
+			return 0;
+		}
+
+		Mob shikigami = activeShikigami.get(shikigamiId);
+		if (shikigami == null) {
+			return 0;
+		}
+
+		ShikigamiType type = getShikigamiType(shikigami);
+		if (type == null) {
+			return 0;
+		}
+
+		return behaviorFor(type).absorbShieldDamage(shikigami, incomingDamage);
+	}
+
+	/**
+	 * Starts a shield attempt: {@code shikigamiId} flies to {@code requester} and, once it arrives,
+	 * both become immobile and a configurable pool of the owner's incoming damage is absorbed. A
+	 * no-op for any type whose archetype doesn't support it (see {@link ShikigamiBehavior#supportsShield}),
+	 * same contract as {@link #toggleCarry}, and for anyone but the shikigami's own owner. What "start"
+	 * actually means from here (begin approaching, or do nothing if already busy with something else)
+	 * is entirely up to the archetype; see {@link ShikigamiBehavior#onShieldToggle}.
+	 */
+	public void startShieldApproach(UUID shikigamiId, Player requester) {
+		Mob shikigami = activeShikigami.get(shikigamiId);
+		if (shikigami == null) {
+			return;
+		}
+
+		ShikigamiType type = getShikigamiType(shikigami);
+		if (type == null || !behaviorFor(type).supportsShield()) {
+			return;
+		}
+
+		Player owner = getOwner(shikigami);
+		if (owner == null || !owner.getUniqueId().equals(requester.getUniqueId())) {
+			return;
+		}
+
+		behaviorFor(type).onShieldToggle(shikigami, type, owner, true);
+	}
+
+	/**
+	 * Ends whatever shield state {@code shikigamiId} is currently in (a pending approach or an
+	 * already-engaged shield) — a safe no-op if neither. Unlike {@link #startShieldApproach}, this
+	 * isn't gated on {@code supportsShield()} — ending something should never itself be blocked.
+	 */
+	public void endShield(UUID shikigamiId, Player requester) {
+		Mob shikigami = activeShikigami.get(shikigamiId);
+		if (shikigami == null) {
+			return;
+		}
+
+		ShikigamiType type = getShikigamiType(shikigami);
+		if (type == null) {
+			return;
+		}
+
+		Player owner = getOwner(shikigami);
+		if (owner == null || !owner.getUniqueId().equals(requester.getUniqueId())) {
+			return;
+		}
+
+		behaviorFor(type).onShieldToggle(shikigami, type, owner, false);
+	}
+
+	/**
+	 * Fires the "clap" ability (a one-shot effect centered on the shikigami's own current location,
+	 * e.g. Nue's Electric Wing Clap) — a no-op for any type whose archetype doesn't support it (see
+	 * {@link ShikigamiBehavior#supportsClap}), same contract as {@link #toggleCarry}, and for anyone
+	 * but the shikigami's own owner. What it actually does (damage, visuals, cooldown) is entirely up
+	 * to the archetype; see {@link ShikigamiBehavior#onClap}.
+	 */
+	public void activateClap(UUID shikigamiId, Player requester) {
+		Mob shikigami = activeShikigami.get(shikigamiId);
+		if (shikigami == null) {
+			return;
+		}
+
+		ShikigamiType type = getShikigamiType(shikigami);
+		if (type == null || !behaviorFor(type).supportsClap()) {
+			return;
+		}
+
+		Player owner = getOwner(shikigami);
+		if (owner == null || !owner.getUniqueId().equals(requester.getUniqueId())) {
+			return;
+		}
+
+		behaviorFor(type).onClap(shikigami, type, owner);
+	}
+
+	/**
+	 * Whether {@code player}'s current main-hand item is the control item for {@code shikigamiId} —
+	 * exposed so {@code FlightBehavior}'s per-tick shield rechecks (mirroring {@code Barrage}'s own
+	 * per-tick "stillChanneling" recheck) don't need their own copy of
+	 * {@code ShikigamiListener#readShikigamiId}.
+	 */
+	public boolean isHoldingControlItemFor(Player player, UUID shikigamiId) {
+		ItemStack item = player.getInventory().getItemInMainHand();
+		if (!item.hasItemMeta()) {
+			return false;
+		}
+
+		String idRaw = item.getItemMeta().getPersistentDataContainer().get(entityIdKey, PersistentDataType.STRING);
+		return shikigamiId.toString().equals(idRaw);
+	}
+
+	/**
+	 * Marks {@code playerId} so their very next fall-damage instance is cancelled, then immediately
+	 * consumed — not a timed effect, since there's no way to know in advance how long they'll be
+	 * falling for. Used when a carry ride ends (by choice or by the shikigami being force-despawned
+	 * out from under them mid-air), so that landing doesn't cost them fall damage.
+	 */
+	public void markFallDamageImmune(UUID playerId) {
+		fallDamageImmune.add(playerId);
+	}
+
+	/**
+	 * Returns whether {@code playerId} currently has fall-damage immunity pending, consuming it (it
+	 * only ever protects the one fall) if so.
+	 */
+	public boolean consumeFallDamageImmunity(UUID playerId) {
+		return fallDamageImmune.remove(playerId);
 	}
 
 	/**
@@ -898,6 +1261,7 @@ public class ShikigamiManager implements JJKManager, PacketListener {
 					listener.onDespawn(ownerId, type);
 				}
 			}
+
 			shikigami.remove();
 		}
 		trackCooldownExpiry.remove(shikigamiId);

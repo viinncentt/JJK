@@ -18,6 +18,7 @@ public enum ShikigamiType {
 	BLACK_DIVINE_DOG,
 	NUE;
 
+	private String displayName;
 	private EntityType entityType;
 	private double cursedEnergyDrainAmount;
 	private long trackCooldownMillis;
@@ -46,11 +47,12 @@ public enum ShikigamiType {
 	public record ControlItemLore(List<String> lines) {
 	}
 
-	public void load(EntityType entityType, double cursedEnergyDrainAmount, long trackCooldownMillis,
-			double trackCursedEnergyCost, TextColor trackLocatorColor, TextColor trackEntityColor,
-			TextColor highlightColor, double scale, double speed, double damage, double health,
-			double regenAmount, double despawnedRegenPerSecond, double followRange, boolean defaultTamed,
-			boolean defaultSummonable, ControlItemLore controlItemLore) {
+	public void load(String displayName, EntityType entityType, double cursedEnergyDrainAmount,
+			long trackCooldownMillis, double trackCursedEnergyCost, TextColor trackLocatorColor,
+			TextColor trackEntityColor, TextColor highlightColor, double scale, double speed, double damage,
+			double health, double regenAmount, double despawnedRegenPerSecond, double followRange,
+			boolean defaultTamed, boolean defaultSummonable, ControlItemLore controlItemLore) {
+		this.displayName = displayName;
 		this.entityType = entityType;
 		this.cursedEnergyDrainAmount = cursedEnergyDrainAmount;
 		this.trackCooldownMillis = trackCooldownMillis;
@@ -68,6 +70,14 @@ public enum ShikigamiType {
 		this.defaultTamed = defaultTamed;
 		this.defaultSummonable = defaultSummonable;
 		this.controlItemLore = controlItemLore;
+	}
+
+	/**
+	 * The control item's display name (MiniMessage), configured as {@code DisplayName} — what shows
+	 * up in the item's own tooltip and any admin-menu listing of this type.
+	 */
+	public String getDisplayName() {
+		return displayName;
 	}
 
 	public EntityType getEntityType() {

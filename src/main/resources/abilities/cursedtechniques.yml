@@ -15,7 +15,7 @@ techniques:
         material: DIAMOND
         damage: 3
         cooldown: 1000
-        cursed-energy-cost: 250
+        cursed-energy-cost: 400
 
       TOAD:
         display-name: "<#0F6870>Toad"

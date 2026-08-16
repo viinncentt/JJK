@@ -1,7 +1,0 @@
-CursedEnergy:
-  DefaultMaxCursedEnergy: 100
-  RegenAmount: 0.02
-  RegenPeriodTicks: 20
-
-LocatorBar:
-  UpdatePeriodTicks: 5

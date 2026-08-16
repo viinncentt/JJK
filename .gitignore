@@ -1,0 +1,16 @@
+# Gradle
+.gradle/
+build/
+
+# Eclipse
+bin/
+.classpath
+.project
+.settings/
+
+# IntelliJ
+.idea/
+*.iml
+
+# VS Code
+.vscode/

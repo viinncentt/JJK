@@ -1,9 +1,0 @@
-name: JJK
-version: '1.0.0'
-
-main: at.vl.jJK.JJK
-api-version: '26.2'
-load: STARTUP
-
-softdepend: [ModelEngine, Oraxen]
-

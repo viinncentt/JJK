@@ -150,7 +150,12 @@ public class ScoreboardManager implements JJKManager {
 					&& jjk.getShikigamiManager().hasActiveShikigami(player.getUniqueId(), ShikigamiType.WHITE_DIVINE_DOG)
 					&& jjk.getShikigamiManager().hasActiveShikigami(player.getUniqueId(), ShikigamiType.BLACK_DIVINE_DOG);
 
-			boolean unusable = onCooldown || bothDivineDogsOut;
+			// Same idea for Nue (see TenShadows#activateNue) — re-activating while it's already
+			// summoned is a no-op, so show it as unusable for as long as it's out.
+			boolean nueActive = bound == AbilityType.NUE
+					&& jjk.getShikigamiManager().hasActiveShikigami(player.getUniqueId(), ShikigamiType.NUE);
+
+			boolean unusable = onCooldown || bothDivineDogsOut || nueActive;
 
 			Component name = unusable
 					? MiniMessage.miniMessage().deserialize("<strikethrough>" + bound.getDisplayName())

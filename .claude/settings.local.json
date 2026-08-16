@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "Bash(curl -s \"https://raw.githubusercontent.com/ProjectKorra/ProjectKorra/master/core/src/com/projectkorra/projectkorra/configuration/ConfigManager.java\")",
+      "WebFetch(domain:docs.papermc.io)"
+    ]
+  }
+}

@@ -1,0 +1,7 @@
+moves:
+  BLACK_FLASH:
+    display-name: "<gold>Black Flash"
+    material: NETHER_STAR
+    damage: 10
+    cooldown: 10000
+    cursed-energy-cost: 500

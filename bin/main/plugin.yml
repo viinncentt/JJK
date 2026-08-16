@@ -1,0 +1,7 @@
+name: JJK
+version: '${version}'
+
+main: at.vl.jJK.JJK
+api-version: '26.2'
+load: STARTUP
+

@@ -1,0 +1,142 @@
+Highlight:
+  Enabled: true
+
+Regen:
+  PeriodTicks: 200
+
+ItemLoreUpdatePeriodTicks: 10
+
+AiTickPeriodTicks: 1
+
+Types:
+  WHITE_DIVINE_DOG:
+    EntityType: WOLF
+    CursedEnergyDrainAmount: 10
+    HighlightColor: WHITE
+
+    Behavior: GROUND_MELEE
+
+    Scale: 2.0
+    Speed: 0.5
+    Damage: 7.5
+    Health: 200.0
+    RegenAmount: 0.25
+    DespawnedRegenPerSecond: 1
+    FollowRange: 64.0
+
+    DefaultTamed: true
+    DefaultSummonable: true
+
+    Track:
+      CooldownMillis: 1500
+      CursedEnergyCost: 0
+      Color: "#A793D0"
+      EntityColor: WHITE
+
+    Charge:
+      Speed: 2.5
+      Damage: 5.0
+      StunDurationMillis: 1000
+      MaxDurationMillis: 5000
+      HitRadius: 1.5
+      TickInterval: 1
+
+      Particle:
+        Type: CLOUD
+        Count: 1
+        Spread: 0.3
+        Speed: 0.02
+        DistanceBehind: 2.0
+
+    Lore:
+      Line1: "<#74668F>Press <key:key.sneak> + Right Click to despawn"
+      Line2: "<#74668F>Right Click a Block to recall"
+      Line3: "<#74668F>Right Click while looking at Target to attack"
+      Line4: "<#74668F>Right Click an Entity to track them"
+      Line5: "<#74668F>Press <key:key.drop> while looking at Target to charge"
+
+  BLACK_DIVINE_DOG:
+    EntityType: WOLF
+    CursedEnergyDrainAmount: 10
+    HighlightColor: DARK_BLUE
+
+    Behavior: GROUND_MELEE
+
+    Scale: 2.0
+    Speed: 0.5
+    Damage: 7.5
+    Health: 200.0
+    RegenAmount: 0.25
+    DespawnedRegenPerSecond: 1
+    FollowRange: 64.0
+
+    DefaultTamed: true
+    DefaultSummonable: true
+
+    Track:
+      CooldownMillis: 1500
+      CursedEnergyCost: 0
+      Color: "#392B54"
+      EntityColor: DARK_BLUE
+
+    Charge:
+      Speed: 2.0
+      Damage: 5.0
+      StunDurationMillis: 1000
+      MaxDurationMillis: 5000
+      HitRadius: 1.5
+      TickInterval: 1
+
+      Particle:
+        Type: CLOUD
+        Count: 3
+        Spread: 0.15
+        Speed: 0.02
+        DistanceBehind: 1.0
+
+    Lore:
+      Line1: "<#74668F>Press <key:key.sneak> + Right Click to despawn"
+      Line2: "<#74668F>Right Click a Block to recall"
+      Line3: "<#74668F>Right Click while looking at Target to attack"
+      Line4: "<#74668F>Right Click an Entity to track them"
+      Line5: "<#74668F>Press <key:key.drop> while looking at Target to charge"
+
+  NUE:
+    EntityType: WOLF
+    CursedEnergyDrainAmount: 40
+    HighlightColor: PURPLE
+
+    # FLIGHT behavior has no track or charge ability — just idle flight + attack/recall, driven
+    # entirely by the Flight config below.
+    Behavior: FLIGHT
+
+    Scale: 2.5
+    Speed: 0.5
+    Damage: 10.0
+    Health: 400.0
+    RegenAmount: 0.25
+    DespawnedRegenPerSecond: 1
+    FollowRange: 64.0
+
+    DefaultTamed: true
+    DefaultSummonable: true
+
+    Flight:
+      OrbitRadius: 4.0
+      HeightOffset: 4.0
+      Speed: 1.0
+      AngularSpeedDegreesPerSecond: 20.0
+      AttackRange: 2.0
+      AttackIntervalMillis: 1000
+
+    Lore:
+      Line1: "<#74668F>Press <key:key.sneak> + Right Click to despawn"
+      Line2: "<#74668F>Right Click a Block to recall"
+      Line3: "<#74668F>Right Click while looking at Target to attack"
+
+Order:
+  TargetRange: 30.0
+  TargetRaySize: 0.4
+
+CursedEnergy:
+  DrainPeriodTicks: 20

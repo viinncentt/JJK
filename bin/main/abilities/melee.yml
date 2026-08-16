@@ -1,0 +1,23 @@
+moves:
+  BARRAGE:
+    display-name: "<white>Barrage"
+    material: IRON_INGOT
+    damage: 2.0
+    cooldown: 3000
+    cursed-energy-cost: 0
+    channel-max-duration: 5000
+    channel-tick-interval: 2
+    channel-swing-interval: 1
+    channel-forward-distance: 1.5
+    channel-radius: 2
+    channel-particle-count: 2
+    channel-particle-speed: 0.3
+    channel-particle-spread: 0.3
+    channel-particle-target-offset: 0.1
+    stun-duration: 1500
+  UPPERCUT:
+    display-name: "<white>Uppercut"
+    material: IRON_INGOT
+    damage: 4
+    cooldown: 5000
+    cursed-energy-cost: 0

@@ -1,0 +1,103 @@
+techniques:
+  TEN_SHADOWS:
+    family: ZENIN
+    display-name: "<gradient:#792AFA:#0F6870>Ten Shadows</gradient><gradient:#0F6870:#030303> Technique</gradient>"
+    abilities:
+      DIVINE_DOGS:
+        display-name: "<#0F6870>Divine Dogs"
+        material: DIAMOND
+        damage: 3
+        cooldown: 5000
+        cursed-energy-cost: 250
+
+      NUE:
+        display-name: "<#0F6870>Nue"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      TOAD:
+        display-name: "<#0F6870>Toad"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      GREAT_SERPENT:
+        display-name: "<#0F6870>Great Serpent"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      MAX_ELEPHANT:
+        display-name: "<#0F6870>Max Elephant"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      RABBIT_ESCAPE:
+        display-name: "<#0F6870>Rabbit Escape"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      ROUND_DEER:
+        display-name: "<#0F6870>Round Deer"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      PIERCING_OX:
+        display-name: "<#0F6870>Piercing Ox"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      MAHORAGA:
+        display-name: "<#0F6870>Divine General Mahoraga"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      TOAD_MOBILITY:
+        display-name: "<#0F6870>Toad Mobility"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      DIVINE_DOG_TOTALITY:
+        display-name: "<#0F6870>Divine Dog: Totality"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      MERGED_BEAST_AGITO:
+        display-name: "<#0F6870>Merged Beast: Agito"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+      CHIMERA_SHADOW_GARDEN:
+        display-name: "<#0F6870>Chimera Shadow Garden"
+        material: DIAMOND
+        damage: 3
+        cooldown: 1000
+        cursed-energy-cost: 250
+
+  PROJECTION_SORCERY:
+    family: ZENIN
+    display-name: "<gradient:#792AFA:#F1B93C>Projection</gradient><gradient:#F1B93C:#F1B93C> Sorcery</gradient>"
+
+  STRAW_DOLL:
+    family: NONE
+    display-name: "<yellow>Straw Doll</yellow>"

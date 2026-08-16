@@ -1,0 +1,7 @@
+moves:
+  SWORD_SLASH:
+    display-name: "<white>Sword Slash"
+    material: IRON_SWORD
+    damage: 3
+    cooldown: 800
+    cursed-energy-cost: 0

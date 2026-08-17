@@ -1,6 +1,6 @@
 Jujutsu Kaisen Paper Plugin.
 
-A minecraft Jujutsu Kaisen Plugin I am making to test out Claude Code. About 74% of the code was written by Claude Code.
+A Paper Jujutsu Kaisen Plugin I am making to test out Claude Code. About 74% of the code was written by Claude Code.
 
 [Full Wakatime Project](https://wakatime.com/@704ec189-b218-4e9d-ab79-767ef832c5b6/projects/waodstwszi)
 
